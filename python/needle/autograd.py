@@ -1,12 +1,14 @@
 """Core data structures."""
 
-import needle
-from .backend_numpy import Device, all_devices
-from typing import List, Optional, NamedTuple, Tuple, Union, Dict
 from collections import namedtuple
+from typing import Dict, List, NamedTuple, Optional, Tuple, Union
+
 import numpy
 
+import needle
 from needle import init
+
+from .backend_numpy import Device, all_devices
 
 # needle version
 LAZY_MODE = False
@@ -19,7 +21,7 @@ import numpy as array_api
 
 NDArray = numpy.ndarray
 
-from .backend_selection import array_api, NDArray, default_device, cpu
+from .backend_selection import NDArray, array_api, cpu, default_device
 
 
 class Op:
@@ -126,7 +128,7 @@ class Value:
         *,
         num_outputs: int = 1,
         cached_data: List[object] = None,
-        requires_grad: Optional[bool] = None
+        requires_grad: Optional[bool] = None,
     ):
         global TENSOR_COUNTER
         TENSOR_COUNTER += 1
@@ -204,7 +206,7 @@ class Tensor(Value):
         device: Optional[Device] = None,
         dtype=None,
         requires_grad=True,
-        **kwargs
+        **kwargs,
     ):
         if isinstance(array, Tensor):
             if device is None:
@@ -371,18 +373,35 @@ def compute_gradient_of_variables(output_tensor, out_grad):
 
     Store the computed result in the grad field of each Variable.
     """
-    # a map from node to a list of gradient contributions from each output node
-    node_to_output_grads_list: Dict[Tensor, List[Tensor]] = {}
-    # Special note on initializing gradient of
+    # Map from node to a list of gradient contributions from each output node
+    node_to_output_grads_list: dict[Tensor, List[Tensor]] = {}
+
+    # Traverse graph in reverse topological order given the output_node that we
+    # are taking gradient wrt.
+    reverse_topo_order = list(reversed(find_topo_sort([output_tensor])))
+    for node in reverse_topo_order:
+        node_to_output_grads_list[node] = []
+
+    # Special note on initializing the dictionary:
+    #
     # We are really taking a derivative of the scalar reduce_sum(output_node)
-    # instead of the vector output_node. But this is the common case for loss function.
+    # instead of the vector output_node. But this is the common case for loss
+    # function.
     node_to_output_grads_list[output_tensor] = [out_grad]
 
-    # Traverse graph in reverse topological order given the output_node that we are taking gradient wrt.
-    reverse_topo_order = list(reversed(find_topo_sort([output_tensor])))
-
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    for node in reverse_topo_order:
+        node.grad = sum(node_to_output_grads_list[node])
+        assert isinstance(node, Tensor)
+
+        # The input doesn't have an op:
+        if node.op is None:
+            continue
+
+        adjoints = node.op.gradient_as_tuple(out_grad=node.grad, node=node)
+
+        for i, child in enumerate(node.inputs):
+            node_to_output_grads_list[child].append(adjoints[i])
     ### END YOUR SOLUTION
 
 
@@ -395,14 +414,23 @@ def find_topo_sort(node_list: List[Value]) -> List[Value]:
     sort.
     """
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    visited = set()
+    topo_order = []
+    for node in node_list:
+        topo_sort_dfs(node, visited=visited, topo_order=topo_order)
+    return topo_order
     ### END YOUR SOLUTION
 
 
 def topo_sort_dfs(node, visited, topo_order):
     """Post-order DFS"""
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    if node in visited:
+        return
+    for child in node.inputs:
+        topo_sort_dfs(child, visited, topo_order)
+    topo_order.append(node)
+    visited.add(node)
     ### END YOUR SOLUTION
 
 
@@ -413,7 +441,7 @@ def topo_sort_dfs(node, visited, topo_order):
 
 def sum_node_list(node_list):
     """Custom sum function in order to avoid create redundant nodes in Python sum implementation."""
-    from operator import add
     from functools import reduce
+    from operator import add
 
     return reduce(add, node_list)
