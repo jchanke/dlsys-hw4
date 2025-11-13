@@ -1,5 +1,5 @@
-"""The module.
-"""
+"""The module."""
+
 from typing import Any
 from needle.autograd import Tensor
 from needle import ops
@@ -80,7 +80,14 @@ class Identity(Module):
 
 
 class Linear(Module):
-    def __init__(self, in_features: int, out_features: int, bias: bool = True, device: Any | None = None, dtype: str = "float32") -> None:
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        bias: bool = True,
+        device: Any | None = None,
+        dtype: str = "float32",
+    ) -> None:
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
@@ -108,6 +115,7 @@ class ReLU(Module):
         raise NotImplementedError()
         ### END YOUR SOLUTION
 
+
 class Sequential(Module):
     def __init__(self, *modules: Module) -> None:
         super().__init__()
@@ -127,7 +135,14 @@ class SoftmaxLoss(Module):
 
 
 class BatchNorm1d(Module):
-    def __init__(self, dim: int, eps: float = 1e-5, momentum: float = 0.1, device: Any | None = None, dtype: str = "float32") -> None:
+    def __init__(
+        self,
+        dim: int,
+        eps: float = 1e-5,
+        momentum: float = 0.1,
+        device: Any | None = None,
+        dtype: str = "float32",
+    ) -> None:
         super().__init__()
         self.dim = dim
         self.eps = eps
@@ -141,6 +156,7 @@ class BatchNorm1d(Module):
         raise NotImplementedError()
         ### END YOUR SOLUTION
 
+
 class BatchNorm2d(BatchNorm1d):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -150,11 +166,17 @@ class BatchNorm2d(BatchNorm1d):
         s = x.shape
         _x = x.transpose((1, 2)).transpose((2, 3)).reshape((s[0] * s[2] * s[3], s[1]))
         y = super().forward(_x).reshape((s[0], s[2], s[3], s[1]))
-        return y.transpose((2,3)).transpose((1,2))
+        return y.transpose((2, 3)).transpose((1, 2))
 
 
 class LayerNorm1d(Module):
-    def __init__(self, dim: int, eps: float = 1e-5, device: Any | None = None, dtype: str = "float32") -> None:
+    def __init__(
+        self,
+        dim: int,
+        eps: float = 1e-5,
+        device: Any | None = None,
+        dtype: str = "float32",
+    ) -> None:
         super().__init__()
         self.dim = dim
         self.eps = eps

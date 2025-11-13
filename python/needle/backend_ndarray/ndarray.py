@@ -51,7 +51,9 @@ class BackendDevice:
         assert dtype == "float32"
         return NDArray.make(shape, device=self)
 
-    def full(self, shape: tuple[int, ...], fill_value: float, dtype: str = "float32") -> "NDArray":
+    def full(
+        self, shape: tuple[int, ...], fill_value: float, dtype: str = "float32"
+    ) -> "NDArray":
         dtype = "float32" if dtype is None else dtype
         assert dtype == "float32"
         arr = self.empty(shape, dtype)
@@ -237,7 +239,11 @@ class NDArray:
         """Restride the matrix without copying memory."""
         assert len(shape) == len(strides)
         return NDArray.make(
-            shape, strides=strides, device=self.device, handle=self._handle, offset=self._offset
+            shape,
+            strides=strides,
+            device=self.device,
+            handle=self._handle,
+            offset=self._offset,
         )
 
     @property
@@ -381,7 +387,11 @@ class NDArray:
         raise NotImplementedError()
         ### END YOUR SOLUTION
 
-    def __setitem__(self, idxs: int | slice | tuple[int | slice, ...], other: Union["NDArray", float]) -> None:
+    def __setitem__(
+        self,
+        idxs: int | slice | tuple[int | slice, ...],
+        other: Union["NDArray", float],
+    ) -> None:
         """Set the values of a view into an array, using the same semantics
         as __getitem__()."""
         view = self.__getitem__(idxs)
@@ -551,14 +561,16 @@ class NDArray:
             return out
 
     ### Reductions, i.e., sum/max over all element or over given axis
-    def reduce_view_out(self, axis: int | tuple[int, ...] | list[int] | None, keepdims: bool = False) -> tuple["NDArray", "NDArray"]:
-        """ Return a view to the array set up for reduction functions and output array. """
+    def reduce_view_out(
+        self, axis: int | tuple[int, ...] | list[int] | None, keepdims: bool = False
+    ) -> tuple["NDArray", "NDArray"]:
+        """Return a view to the array set up for reduction functions and output array."""
         if isinstance(axis, tuple) and not axis:
             raise ValueError("Empty axis in reduce")
 
         if axis is None:
             view = self.compact().reshape((1,) * (self.ndim - 1) + (prod(self.shape),))
-            #out = NDArray.make((1,) * self.ndim, device=self.device)
+            # out = NDArray.make((1,) * self.ndim, device=self.device)
             out = NDArray.make((1,), device=self.device)
 
         else:
@@ -570,19 +582,29 @@ class NDArray:
                 tuple([a for a in range(self.ndim) if a != axis]) + (axis,)
             )
             out = NDArray.make(
-                tuple([1 if i == axis else s for i, s in enumerate(self.shape)])
-                if keepdims else
-                tuple([s for i, s in enumerate(self.shape) if i != axis]),
+                (
+                    tuple([1 if i == axis else s for i, s in enumerate(self.shape)])
+                    if keepdims
+                    else tuple([s for i, s in enumerate(self.shape) if i != axis])
+                ),
                 device=self.device,
             )
         return view, out
 
-    def sum(self, axis: int | tuple[int, ...] | list[int] | None = None, keepdims: bool = False) -> "NDArray":
+    def sum(
+        self,
+        axis: int | tuple[int, ...] | list[int] | None = None,
+        keepdims: bool = False,
+    ) -> "NDArray":
         view, out = self.reduce_view_out(axis, keepdims=keepdims)
         self.device.reduce_sum(view.compact()._handle, out._handle, view.shape[-1])
         return out
 
-    def max(self, axis: int | tuple[int, ...] | list[int] | None = None, keepdims: bool = False) -> "NDArray":
+    def max(
+        self,
+        axis: int | tuple[int, ...] | list[int] | None = None,
+        keepdims: bool = False,
+    ) -> "NDArray":
         view, out = self.reduce_view_out(axis, keepdims=keepdims)
         self.device.reduce_max(view.compact()._handle, out._handle, view.shape[-1])
         return out
@@ -606,19 +628,29 @@ class NDArray:
         raise NotImplementedError()
         ### END YOUR SOLUTION
 
-def array(a: Any, dtype: str = "float32", device: BackendDevice | None = None) -> NDArray:
+
+def array(
+    a: Any, dtype: str = "float32", device: BackendDevice | None = None
+) -> NDArray:
     """Convenience methods to match numpy a bit more closely."""
     dtype = "float32" if dtype is None else dtype
     assert dtype == "float32"
     return NDArray(a, device=device)
 
 
-def empty(shape: tuple[int, ...], dtype: str = "float32", device: BackendDevice | None = None) -> NDArray:
+def empty(
+    shape: tuple[int, ...], dtype: str = "float32", device: BackendDevice | None = None
+) -> NDArray:
     device = device if device is not None else default_device()
     return device.empty(shape, dtype)
 
 
-def full(shape: tuple[int, ...], fill_value: float, dtype: str = "float32", device: BackendDevice | None = None) -> NDArray:
+def full(
+    shape: tuple[int, ...],
+    fill_value: float,
+    dtype: str = "float32",
+    device: BackendDevice | None = None,
+) -> NDArray:
     device = device if device is not None else default_device()
     return device.full(shape, fill_value, dtype)
 
@@ -647,7 +679,9 @@ def tanh(a: NDArray) -> NDArray:
     return a.tanh()
 
 
-def sum(a: NDArray, axis: int | tuple[int] | list[int] | None = None, keepdims: bool = False) -> NDArray:
+def sum(
+    a: NDArray, axis: int | tuple[int] | list[int] | None = None, keepdims: bool = False
+) -> NDArray:
     return a.sum(axis=axis, keepdims=keepdims)
 
 

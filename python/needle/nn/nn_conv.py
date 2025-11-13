@@ -1,5 +1,5 @@
-"""The module.
-"""
+"""The module."""
+
 from typing import List, Callable, Any
 from needle.autograd import Tensor
 from needle import ops
@@ -16,7 +16,17 @@ class Conv(Module):
     No grouped convolution or dilation
     Only supports square kernels
     """
-    def __init__(self, in_channels, out_channels, kernel_size, stride=1, bias=True, device=None, dtype="float32"):
+
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride=1,
+        bias=True,
+        device=None,
+        dtype="float32",
+    ):
         super().__init__()
         if isinstance(kernel_size, tuple):
             kernel_size = kernel_size[0]

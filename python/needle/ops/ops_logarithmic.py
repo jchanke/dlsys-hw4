@@ -5,7 +5,8 @@ from ..autograd import TensorTuple, TensorTupleOp
 
 from .ops_mathematic import *
 
-from ..backend_selection import array_api, BACKEND 
+from ..backend_selection import array_api, BACKEND
+
 
 class LogSoftmax(TensorOp):
     def compute(self, Z: NDArray) -> NDArray:
