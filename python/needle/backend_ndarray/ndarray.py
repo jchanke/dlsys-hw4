@@ -253,7 +253,7 @@ class NDArray:
     def flat(self) -> "NDArray":
         return self.reshape((self.size,))
 
-    def reshape(self, new_shape: tuple[int, ...]) -> "NDArray":
+    def reshape(self, shape: tuple[int, ...]) -> "NDArray":
         """
         Reshape the matrix without copying memory.  This will return a matrix
         that corresponds to a reshaped array but points to the same memory as
@@ -264,22 +264,22 @@ class NDArray:
             of the new shape, or if the matrix is not compact.
 
         Args:
-            new_shape (tuple): new shape of the array
+            shape (tuple): new shape of the array
 
         Returns:
-            NDArray : reshaped array; this will point to thep
+            NDArray : this will point to the reshaped array
         """
 
         ### BEGIN YOUR SOLUTION
-        if not prod(self.shape) == prod(new_shape):
+        if not prod(self.shape) == prod(shape):
             raise ValueError("invalid new shape doesn't have same number of entries")
 
         if not self.is_compact():
             raise ValueError("called 'reshape' on non-compact array")
 
         return NDArray.make(
-            shape=new_shape,
-            strides=NDArray.compact_strides(new_shape),
+            shape=shape,
+            strides=NDArray.compact_strides(shape),
             device=self.device,
             handle=self._handle,
             offset=self._offset,
@@ -319,7 +319,7 @@ class NDArray:
         )
         ### END YOUR SOLUTION
 
-    def broadcast_to(self, new_shape: tuple[int, ...]) -> "NDArray":
+    def broadcast_to(self, shape: tuple[int, ...]) -> "NDArray":
         """
         Broadcast an array to a new shape.  new_shape's elements must be the
         same as the original shape, except for dimensions in the self where
@@ -340,20 +340,20 @@ class NDArray:
         """
 
         ### BEGIN YOUR SOLUTION
-        assert len(new_shape) == len(self.shape), (
-            "broadcast_to: new_shape doesn't have same num. dim's as existing shape"
+        assert len(shape) == len(self.shape), (
+            "broadcast_to: `shape` doesn't have same num. dim's as existing shape"
         )
         assert all(
-            self.shape[i] == new_shape[i] or self.shape[i] == 1
-            for i in range(-1, -len(new_shape), -1)
-        ), "broadcast_to: invalid new_shape"
+            self.shape[i] == shape[i] or self.shape[i] == 1
+            for i in range(-1, -len(shape), -1)
+        ), "broadcast_to: invalid `shape` argument"
 
         new_strides = tuple(
-            self.strides[i] if self.shape[i] == new_shape[i] else 0
+            self.strides[i] if self.shape[i] == shape[i] else 0
             for i in range(len(self.strides))
         )
         return NDArray.make(
-            shape=new_shape,
+            shape=shape,
             strides=new_strides,
             device=self.device,
             handle=self._handle,
@@ -524,7 +524,9 @@ class NDArray:
             other, self.device.ewise_maximum, self.device.scalar_maximum
         )
 
-    ### Binary operators all return (0.0, 1.0) floating point values, could of course be optimized
+    ### Binary operators
+
+    # all return (0.0, 1.0) floating point values, could of course be optimized
     def __eq__(self, other: Any) -> "NDArray":  # type: ignore[override]
         return self.ewise_or_scalar(other, self.device.ewise_eq, self.device.scalar_eq)
 
@@ -615,7 +617,9 @@ class NDArray:
 
     ### Reductions, i.e., sum/max over all element or over given axis
     def reduce_view_out(
-        self, axis: int | tuple[int, ...] | list[int] | None, keepdims: bool = False
+        self,
+        axis: int | tuple[int, ...] | list[int] | None,
+        keepdims: bool = False,
     ) -> tuple["NDArray", "NDArray"]:
         """Return a view to the array set up for reduction functions and output array."""
         if isinstance(axis, tuple) and not axis:
@@ -623,8 +627,10 @@ class NDArray:
 
         if axis is None:
             view = self.compact().reshape((1,) * (self.ndim - 1) + (prod(self.shape),))
-            # out = NDArray.make((1,) * self.ndim, device=self.device)
-            out = NDArray.make((1,), device=self.device)
+
+            # Originally, always return shape (1,). Following NumPy's semantics:
+            out_shape = (1,) * self.ndim if keepdims else (1,)
+            out = NDArray.make(out_shape, device=self.device)
 
         else:
             if isinstance(axis, (tuple, list)):
@@ -683,7 +689,9 @@ class NDArray:
 
 
 def array(
-    a: Any, dtype: str = "float32", device: BackendDevice | None = None
+    a: Any,
+    dtype: str = "float32",
+    device: BackendDevice | None = None,
 ) -> NDArray:
     """Convenience methods to match numpy a bit more closely."""
     dtype = "float32" if dtype is None else dtype
@@ -692,7 +700,9 @@ def array(
 
 
 def empty(
-    shape: tuple[int, ...], dtype: str = "float32", device: BackendDevice | None = None
+    shape: tuple[int, ...],
+    dtype: str = "float32",
+    device: BackendDevice | None = None,
 ) -> NDArray:
     device = device if device is not None else default_device()
     return device.empty(shape, dtype)
@@ -708,12 +718,22 @@ def full(
     return device.full(shape, fill_value, dtype)
 
 
-def broadcast_to(array: NDArray, new_shape: tuple[int, ...]) -> NDArray:
-    return array.broadcast_to(new_shape)
+def broadcast_to(array: NDArray, shape: tuple[int, ...]) -> NDArray:
+    return array.broadcast_to(shape)
 
 
-def reshape(array: NDArray, new_shape: tuple[int, ...]) -> NDArray:
-    return array.reshape(new_shape)
+def reshape(array: NDArray, shape: tuple[int, ...]) -> NDArray:
+    return array.reshape(shape)
+
+
+def swapaxes(
+    a: NDArray,
+    axis1: int,
+    axis2: int,
+) -> NDArray:
+    new_axes = list(range(a.ndim))
+    new_axes[axis1], new_axes[axis2] = new_axes[axis2], new_axes[axis1]
+    return a.permute(tuple(new_axes))
 
 
 def maximum(a: NDArray, b: NDArray | float) -> NDArray:
@@ -733,9 +753,19 @@ def tanh(a: NDArray) -> NDArray:
 
 
 def sum(
-    a: NDArray, axis: int | tuple[int] | list[int] | None = None, keepdims: bool = False
+    a: NDArray,
+    axis: int | tuple[int] | list[int] | None = None,
+    keepdims: bool = False,
 ) -> NDArray:
     return a.sum(axis=axis, keepdims=keepdims)
+
+
+def max(
+    a: NDArray,
+    axis: int | tuple[int] | list[int] | None = None,
+    keepdims: bool = False,
+) -> NDArray:
+    return a.max(axis=axis, keepdims=keepdims)
 
 
 def flip(a: NDArray, axes: tuple[int, ...]) -> NDArray:

@@ -95,12 +95,11 @@ class TensorTupleOp(Op):
 class Value:
     """A value in the computational graph."""
 
-    # trace of computational graph
+    # Trace of computational graph
     op: Optional[Op]
     inputs: List["Value"]
-    # The following fields are cached fields for
-    # dynamic computation
-    cached_data: NDArray
+    # The following fields are cached fields for dynamic computation
+    cached_data: NDArray | None
     requires_grad: bool
 
     def realize_cached_data(self):
@@ -391,8 +390,7 @@ def compute_gradient_of_variables(output_tensor, out_grad):
 
     ### BEGIN YOUR SOLUTION
     for node in reverse_topo_order:
-        node.grad = sum(node_to_output_grads_list[node])
-        assert isinstance(node, Tensor)
+        node.grad = sum_node_list(node_to_output_grads_list[node])
 
         # The input doesn't have an op:
         if node.op is None:
