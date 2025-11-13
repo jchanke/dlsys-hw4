@@ -1,17 +1,15 @@
 """Operator implementations."""
 
 from numbers import Number
-from typing import Optional, List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
-from ..autograd import NDArray
-from ..autograd import Op, Tensor, Value, TensorOp
-from ..autograd import TensorTuple, TensorTupleOp
 import numpy
+
+from ..autograd import NDArray, Op, Tensor, TensorOp, TensorTuple, TensorTupleOp, Value
 
 # NOTE: we will import numpy as the array_api
 # as the backend for our computations, this line will change in later homeworks
-
-from ..backend_selection import array_api, BACKEND
+from ..backend_selection import BACKEND, array_api
 from .ops_tuple import *
 
 

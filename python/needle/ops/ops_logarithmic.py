@@ -1,11 +1,8 @@
-from typing import Optional, Any, Union
-from ..autograd import NDArray
-from ..autograd import Op, Tensor, Value, TensorOp
-from ..autograd import TensorTuple, TensorTupleOp
+from typing import Any, Optional, Union
 
+from ..autograd import NDArray, Op, Tensor, TensorOp, TensorTuple, TensorTupleOp, Value
+from ..backend_selection import BACKEND, array_api
 from .ops_mathematic import *
-
-from ..backend_selection import array_api, BACKEND
 
 
 class LogSoftmax(TensorOp):
