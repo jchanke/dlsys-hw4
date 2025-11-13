@@ -1,3 +1,4 @@
+import builtins
 import math
 import operator
 from functools import reduce
@@ -5,8 +6,10 @@ from typing import Any, Callable, Iterable, Union
 
 import numpy as np
 
-from . import ndarray_backend_numpy
-from . import ndarray_backend_cpu  # type: ignore[attr-defined]
+from . import (
+    ndarray_backend_cpu,  # type: ignore[attr-defined]
+    ndarray_backend_numpy,
+)
 
 
 # math.prod not in Python 3.7
@@ -268,7 +271,19 @@ class NDArray:
         """
 
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        if not prod(self.shape) == prod(new_shape):
+            raise ValueError("invalid new shape doesn't have same number of entries")
+
+        if not self.is_compact():
+            raise ValueError("called 'reshape' on non-compact array")
+
+        return NDArray.make(
+            shape=new_shape,
+            strides=NDArray.compact_strides(new_shape),
+            device=self.device,
+            handle=self._handle,
+            offset=self._offset,
+        )
         ### END YOUR SOLUTION
 
     def permute(self, new_axes: tuple[int, ...]) -> "NDArray":
@@ -293,7 +308,15 @@ class NDArray:
         """
 
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        new_shape = tuple(self.shape[i] for i in new_axes)
+        new_stride = tuple(self.strides[i] for i in new_axes)
+        return NDArray.make(
+            shape=new_shape,
+            strides=new_stride,
+            device=self.device,
+            handle=self._handle,
+            offset=self._offset,
+        )
         ### END YOUR SOLUTION
 
     def broadcast_to(self, new_shape: tuple[int, ...]) -> "NDArray":
@@ -317,7 +340,25 @@ class NDArray:
         """
 
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        assert len(new_shape) == len(self.shape), (
+            "broadcast_to: new_shape doesn't have same num. dim's as existing shape"
+        )
+        assert all(
+            self.shape[i] == new_shape[i] or self.shape[i] == 1
+            for i in range(-1, -len(new_shape), -1)
+        ), "broadcast_to: invalid new_shape"
+
+        new_strides = tuple(
+            self.strides[i] if self.shape[i] == new_shape[i] else 0
+            for i in range(len(self.strides))
+        )
+        return NDArray.make(
+            shape=new_shape,
+            strides=new_strides,
+            device=self.device,
+            handle=self._handle,
+            offset=self._offset,
+        )
         ### END YOUR SOLUTION]
 
     ### Get and set elements
@@ -384,7 +425,19 @@ class NDArray:
         assert len(slices) == self.ndim, "Need indexes equal to number of dimensions"
 
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        new_offset = self._offset + builtins.sum(
+            s.start * self.strides[i] for i, s in enumerate(slices)
+        )
+        new_strides = tuple(s.step * self.strides[i] for i, s in enumerate(slices))
+        new_shape = tuple((s.stop - s.start - 1) // s.step + 1 for s in slices)
+
+        return NDArray.make(
+            shape=new_shape,
+            strides=new_strides,
+            device=self.device,
+            handle=self._handle,
+            offset=new_offset,
+        )
         ### END YOUR SOLUTION
 
     def __setitem__(
