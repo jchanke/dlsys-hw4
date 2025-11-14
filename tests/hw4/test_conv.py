@@ -1,13 +1,13 @@
 import sys
 
 sys.path.append("./python")
+import itertools
+
+import mugrade
+import needle as ndl
 import numpy as np
 import pytest
 from needle import backend_ndarray as nd
-import needle as ndl
-import mugrade
-import itertools
-
 
 _DEVICES = [
     ndl.cpu(),
@@ -110,6 +110,7 @@ def test_pad_forward(params, device):
     B = A.pad(padding)
 
     assert np.linalg.norm(A.numpy() - _A) < 1e-4
+    np.testing.assert_allclose(B.numpy(), _B)
 
 
 flip_forward_params = [
@@ -137,6 +138,7 @@ def test_flip_forward(params, device):
     B = ndl.flip(A, axes=axes)
 
     assert np.linalg.norm(A.numpy() - _A) < 1e-4
+    np.testing.assert_allclose(B.numpy(), _B)
 
 
 flip_backward_params = [
@@ -496,9 +498,9 @@ def test_nn_conv_backward(s, cin, cout, k, stride, device):
         np.linalg.norm(g.bias.grad.data.numpy() - f.bias.grad.cached_data.numpy())
         < 1e-3
     ), "bias gradients match"
-    assert (
-        np.linalg.norm(z.grad.data.numpy() - x.grad.cached_data.numpy()) < 1e-3
-    ), "input gradients match"
+    assert np.linalg.norm(z.grad.data.numpy() - x.grad.cached_data.numpy()) < 1e-3, (
+        "input gradients match"
+    )
 
 
 op_conv_shapes = [
@@ -682,7 +684,6 @@ def submit_conv_forward():
 
 
 def submit_conv_backward():
-
     def DoConvOpBackward(
         batches, cin, cout, n, k=3, stride=1, padding=0, device=ndl.cpu(), wrtX=True
     ):
