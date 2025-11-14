@@ -674,7 +674,18 @@ class NDArray:
         Note: compact() before returning.
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        # The new offset is the index of the new (0,...,0)th element in old memory
+        idxs = tuple(self.shape[i] - 1 if i in axes else 0 for i in range(self.ndim))
+        new_offset = reduce(operator.add, (i * j for i, j in zip(idxs, self.strides)))
+        new_strides = tuple(-s if j in axes else s for j, s in enumerate(self.strides))
+
+        return NDArray.make(
+            shape=self.shape,
+            strides=new_strides,
+            device=self.device,
+            handle=self._handle,
+            offset=new_offset,
+        ).compact()
         ### END YOUR SOLUTION
 
     def pad(self, axes: tuple[tuple[int, int], ...]) -> "NDArray":
@@ -684,7 +695,18 @@ class NDArray:
         axes = ( (0, 0), (1, 1), (0, 0)) pads the middle axis with a 0 on the left and right side.
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        assert len(axes) == self.ndim, "specify padding for all dim's"
+        assert all(len(amt) == 2 for amt in axes), "give left and right padding"
+
+        # Create a zero'd NDArray of the padded shape
+        new_shape = tuple(s + axes[i][0] + axes[i][1] for i, s in enumerate(self.shape))
+        out = full(new_shape, fill_value=0.0, dtype=self.dtype, device=self.device)
+
+        # Copy over `self` into `out` at the right slices
+        idxs = tuple(slice(l, l + self.shape[i]) for i, (l, _) in enumerate(axes))
+        out[idxs] = self
+
+        return out
         ### END YOUR SOLUTION
 
 
@@ -768,5 +790,10 @@ def max(
     return a.max(axis=axis, keepdims=keepdims)
 
 
-def flip(a: NDArray, axes: tuple[int, ...]) -> NDArray:
-    return a.flip(axes)
+def flip(a: NDArray, axis: int | tuple[int, ...] | None) -> NDArray:
+    # Coerce `axis` to a tuple
+    if axis is None:
+        axis = tuple(range(a.ndim))
+    elif not isinstance(axis, tuple):
+        axis = (axis,)
+    return a.flip(axis)

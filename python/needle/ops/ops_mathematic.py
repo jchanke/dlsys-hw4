@@ -436,17 +436,17 @@ def split(a, axis):
 
 
 class Flip(TensorOp):
-    def __init__(self, axes: Optional[tuple] = None):
+    def __init__(self, axes: int | Tuple[int] | None = None):
         self.axes = axes
 
     def compute(self, a):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        return array_api.flip(a, axis=self.axes)
         ### END YOUR SOLUTION
 
     def gradient(self, out_grad, node):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        return flip(out_grad, axes=self.axes)
         ### END YOUR SOLUTION
 
 
@@ -455,18 +455,34 @@ def flip(a, axes):
 
 
 class Dilate(TensorOp):
-    def __init__(self, axes: tuple, dilation: int):
+    def __init__(self, axes: int | tuple[int], dilation: int):
+        # Coerce `axes` to a tuple
+        assert axes is not None, "undefined behavior when axes=None"
+        if not isinstance(axes, tuple):
+            axes = (axes,)
         self.axes = axes
         self.dilation = dilation
 
     def compute(self, a):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        ds = tuple(self.dilation + 1 if i in self.axes else 1 for i in range(a.ndim))
+        new_shape = tuple(s * d for s, d in zip(a.shape, ds))
+        out = array_api.full(
+            shape=new_shape,
+            fill_value=0,
+            dtype=a.dtype,
+            device=a.device,
+        )
+
+        idxs = tuple(slice(None, None, d) for d in ds)
+        out[idxs] = a
+
+        return out
         ### END YOUR SOLUTION
 
     def gradient(self, out_grad, node):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        return undilate(out_grad, axes=self.axes, dilation=self.dilation)
         ### END YOUR SOLUTION
 
 
@@ -476,17 +492,23 @@ def dilate(a, axes, dilation):
 
 class UnDilate(TensorOp):
     def __init__(self, axes: tuple, dilation: int):
+        # Coerce `axes` to a tuple
+        assert axes is not None, "undefined behavior when axes=None"
+        if not isinstance(axes, tuple):
+            axes = (axes,)
         self.axes = axes
         self.dilation = dilation
 
     def compute(self, a):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        ds = tuple(self.dilation + 1 if i in self.axes else 1 for i in range(a.ndim))
+        idxs = tuple(slice(None, None, d) for d in ds)
+        return a[idxs]
         ### END YOUR SOLUTION
 
     def gradient(self, out_grad, node):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        return dilate(out_grad, axes=self.axes, dilation=self.dilation)
         ### END YOUR SOLUTION
 
 
