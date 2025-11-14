@@ -1,7 +1,8 @@
-import numpy as np
-from ..autograd import Tensor
+from typing import Any, Iterable, Iterator, List, Optional, Sized, Union
 
-from typing import Iterator, Optional, List, Sized, Union, Iterable, Any
+import numpy as np
+
+from ..autograd import Tensor
 
 
 class Dataset:
@@ -50,7 +51,6 @@ class DataLoader:
         batch_size: Optional[int] = 1,
         shuffle: bool = False,
     ):
-
         self.dataset = dataset
         self.shuffle = shuffle
         self.batch_size = batch_size
@@ -61,11 +61,21 @@ class DataLoader:
 
     def __iter__(self):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        if self.shuffle:
+            self.ordering = np.array_split(
+                np.random.permutation(len(self.dataset)),
+                range(self.batch_size, len(self.dataset), self.batch_size),
+            )
+        # Initialize batch index (bi) into self.ordering
+        self.bi = 0
         ### END YOUR SOLUTION
         return self
 
     def __next__(self):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        if self.bi >= len(self.dataset) / self.batch_size:
+            raise StopIteration
+        indices = self.ordering[self.bi]
+        self.bi += 1
+        return tuple(Tensor(X) for X in self.dataset[indices])
         ### END YOUR SOLUTION
