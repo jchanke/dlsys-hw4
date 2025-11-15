@@ -271,6 +271,11 @@ class NDArray:
         """
 
         ### BEGIN YOUR SOLUTION
+        # Match NumPy semantics: if shape[0] == -1, multiply remaining dim's
+        if shape[0] == -1:
+            dim0 = int(prod(self.shape) / prod(shape[1:]))
+            shape = (dim0, *shape[1:])
+
         if not prod(self.shape) == prod(shape):
             raise ValueError("invalid new shape doesn't have same number of entries")
 
@@ -745,6 +750,7 @@ def broadcast_to(array: NDArray, shape: tuple[int, ...]) -> NDArray:
 
 
 def reshape(array: NDArray, shape: tuple[int, ...]) -> NDArray:
+    array = array.compact()
     return array.reshape(shape)
 
 
@@ -756,6 +762,13 @@ def swapaxes(
     new_axes = list(range(a.ndim))
     new_axes[axis1], new_axes[axis2] = new_axes[axis2], new_axes[axis1]
     return a.permute(tuple(new_axes))
+
+
+def pad(
+    a: NDArray,
+    axes: tuple[tuple[int, int]],
+) -> NDArray:
+    return a.pad(axes=axes)
 
 
 def maximum(a: NDArray, b: NDArray | float) -> NDArray:

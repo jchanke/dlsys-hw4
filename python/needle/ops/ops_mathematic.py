@@ -521,14 +521,108 @@ class Conv(TensorOp):
         self.stride = stride
         self.padding = padding
 
-    def compute(self, A, B):
+    def compute(self, A: NDArray, B: NDArray) -> NDArray:
+        """
+        Computes the convolution of two NDArrays.
+
+        Args:
+          A (NDArray): a tensor in NHWI format.
+           - N: batch size
+           - H: height
+           - W: width
+           - I: number of (input) channels
+
+          B (NDArray): a tensor in KKIO format.
+           - K: kernel size
+           - I: number of (input) channels
+           - O: number of (output) channels
+
+        Returns:
+          out (NDArray): convolved matrix, with dimensions NH'W'O.
+
+        -----------------------------------------------------------------------
+        We'll compute this by computing the im2col version of the matrix, i.e.
+
+          NHWC --> N(H-K+1)(W-K+1)KKI --> N(H-K+1)(W-K+1)(KKI)
+
+        The first transformation isolates each "chunk" of the image matching the
+        filter (which has dimension KKI). To compute each output pixel, we sum
+        over all products between the input "chunk" and filter, we can compute
+        this as a matrix multiplication:
+
+          1x(KKI) x (KKI)xO = 1xO
+
+        or, at the level of the whole image,
+
+          NH'W'(KKI) x (KKI)O = NH'W'O
+        """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        # Pad A, if necessary
+        if (p := self.padding) > 0:
+            pad_axes = ((0, 0), (p, p), (p, p), (0, 0))
+            A = array_api.pad(A, axes=pad_axes)
+
+        # (im2col) NHWI --> N(H-K+1)(W-K+1)KKI --> (NH'W')(KKI)
+        N, H, W, I = A.shape
+        K, _, _, O = B.shape
+
+        # N, H, W, and I: strides should stay the same
+        # K, K: strides should be the same as H, W
+        sN, sH, sW, sI = A.strides
+        i2c_shape = (N, H - K + 1, W - K + 1, K, K, I)
+        i2c_strides = (sN, sH, sW, sH, sW, sI)
+
+        A = NDArray.as_strided(A, shape=i2c_shape, strides=i2c_strides)
+
+        # Stride, if necessary, and re-compute shape
+        if (s := self.stride) > 1:
+            all, slice_step = slice(None), slice(None, None, s)
+            idxs = (all, slice_step, slice_step, all, all, all)
+            A = A[idxs]
+        _, H, W, _, _, _ = A.shape
+
+        A = array_api.reshape(A, shape=(-1, K * K * I))
+
+        # Also convert B: KKIO --> (KKI)O
+        B = array_api.reshape(B, shape=(-1, O))
+
+        # (conv) (NH'W')(KKI) x (KKI)O = (NH'W')O ---> NH'W'O
+        return array_api.reshape(A @ B, shape=(N, H, W, O))
         ### END YOUR SOLUTION
 
     def gradient(self, out_grad, node):
+        """
+        Following the convolution implementation lecture,
+         - X.grad ~= conv(~out_grad, ~flipped(W));
+         - W.grad ~= conv(~X, ~out_grad)
+
+
+        """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        # --- Compute X.grad ---
+        X, W = node.inputs
+        K, _, _, _ = W.cached_data.shape
+
+        W_flipped = transpose(flip(W, axes=(0, 1)))
+
+        # Convolving shrinks H,W by (K-1)-2p; pad to increase it back
+        p = (K - 1) - self.padding
+        out_grad_dilated = dilate(out_grad, axes=(1, 2), dilation=self.stride - 1)
+        X_grad = conv(out_grad_dilated, W_flipped, padding=p)
+
+        # --- Compute W.grad (black magic follows: IHWN o H'W'NO = IKKO) ---
+        # NHWI --> IHWN
+        X_IHWN = transpose(X, axes=(0, 3))
+
+        # NH'W'O --> H'W'NO; then dilate (to reverse striding)
+        Z_HWNO = transpose(transpose(out_grad, axes=(0, 1)), axes=(1, 2))
+        Z_HWNO = dilate(Z_HWNO, axes=(0, 1), dilation=self.stride - 1)
+
+        # IHWN o H'W'NO = IKKO, then IKKO --> KKIO
+        W_grad_IKKO = conv(X_IHWN, Z_HWNO, padding=self.padding)
+        W_grad = transpose(transpose(W_grad_IKKO, axes=(0, 1)), axes=(1, 2))
+
+        return (X_grad, W_grad)
         ### END YOUR SOLUTION
 
 
