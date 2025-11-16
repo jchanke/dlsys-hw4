@@ -630,29 +630,36 @@ class NDArray:
         if isinstance(axis, tuple) and not axis:
             raise ValueError("Empty axis in reduce")
 
+        # --- axis is None: sum over all axes ---
         if axis is None:
             view = self.compact().reshape((1,) * (self.ndim - 1) + (prod(self.shape),))
 
             # Originally, always return shape (1,). Following NumPy's semantics:
             out_shape = (1,) * self.ndim if keepdims else (1,)
             out = NDArray.make(out_shape, device=self.device)
+            return view, out
 
-        else:
-            if isinstance(axis, (tuple, list)):
-                assert len(axis) == 1, "Only support reduction over a single axis"
-                axis = axis[0]
+        # --- axis is int, tuple or list ---
+        # Coerce `axis` to tuple or list
+        if not isinstance(axis, (tuple, list)):
+            axis = (axis,)
 
-            view = self.permute(
-                tuple([a for a in range(self.ndim) if a != axis]) + (axis,)
-            )
-            out = NDArray.make(
-                (
-                    tuple([1 if i == axis else s for i, s in enumerate(self.shape)])
-                    if keepdims
-                    else tuple([s for i, s in enumerate(self.shape) if i != axis])
-                ),
-                device=self.device,
-            )
+        # Enforce that each axis in `axis` is non-negative
+        if any(i < 0 for i in axis):
+            n = self.ndim
+            axis = tuple(n + i if i < 0 else i for i in axis)
+
+        # View: shift summed-over axes to back, and take the prod (=reduce_size)
+        permuted_axes = tuple(a for a in range(self.ndim) if a not in axis) + axis
+        view = self.permute(permuted_axes)
+        view_shape = view.shape[: -len(axis)] + (prod(self.shape[i] for i in axis),)
+        view = view.compact().reshape(view_shape)
+
+        # Out: remove or shrink axes to 1, depending on keepdims
+        out_shape = tuple(1 if i in axis else s for i, s in enumerate(self.shape))
+        if not keepdims:
+            out_shape = tuple(s for i, s in enumerate(self.shape) if i not in axis)
+        out = NDArray.make(shape=out_shape, device=self.device)
         return view, out
 
     def sum(
@@ -762,6 +769,16 @@ def swapaxes(
     new_axes = list(range(a.ndim))
     new_axes[axis1], new_axes[axis2] = new_axes[axis2], new_axes[axis1]
     return a.permute(tuple(new_axes))
+
+
+def permute_dims(
+    a: NDArray,
+    axes: tuple[int] | list[int] | None,
+) -> NDArray:
+    # Reverse order of axes (following NumPy semantics)
+    if axes is None:
+        axes = a.shape[::-1]
+    return a.permute(new_axes=axes)
 
 
 def pad(

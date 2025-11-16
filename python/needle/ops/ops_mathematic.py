@@ -170,6 +170,24 @@ def transpose(a, axes=None):
     return Transpose(axes)(a)
 
 
+class Permute(TensorOp):
+    def __init__(self, axes: tuple[int] | list[int] | None = None):
+        self.axes = axes
+
+    def compute(self, a):
+        return array_api.permute_dims(a, axes=self.axes)
+
+    def gradient(self, out_grad, node):
+        reverse_axes = list(self.axes)
+        for i, p in enumerate(self.axes):
+            reverse_axes[p] = i
+        return permute(out_grad, axes=reverse_axes)
+
+
+def permute(a, axes=None):
+    return Permute(axes)(a)
+
+
 class Reshape(TensorOp):
     def __init__(self, shape):
         self.shape = shape
@@ -181,7 +199,8 @@ class Reshape(TensorOp):
 
     def gradient(self, out_grad, node):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        (a,) = node.inputs
+        return reshape(out_grad, a.shape)
         ### END YOUR SOLUTION
 
 
