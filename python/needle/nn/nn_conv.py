@@ -1,20 +1,25 @@
 """The module."""
 
-from typing import List, Callable, Any
-from needle.autograd import Tensor
-from needle import ops
-import needle.init as init
+from typing import Any, Callable, List
+
 import numpy as np
-from .nn_basic import Parameter, Module
+
+import needle.init as init
+from needle import ops
+from needle.autograd import Tensor
+
+from .nn_basic import Module, Parameter
 
 
 class Conv(Module):
     """
-    Multi-channel 2D convolutional layer
-    IMPORTANT: Accepts inputs in NCHW format, outputs also in NCHW format
-    Only supports padding=same
-    No grouped convolution or dilation
-    Only supports square kernels
+    Multi-channel 2D convolutional layer.
+
+    IMPORTANT:
+      Accepts inputs in NCHW format, outputs also in NCHW format.
+      Only supports padding=same
+      No grouped convolution or dilation.
+      Only supports square kernels.
     """
 
     def __init__(
