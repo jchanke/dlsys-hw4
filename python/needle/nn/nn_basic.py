@@ -95,14 +95,13 @@ class Linear(Module):
         self.out_features = out_features
 
         ### BEGIN YOUR SOLUTION
-        self.weight = Parameter(
-            init.kaiming_uniform(
-                in_features,
-                out_features,
-                device=device,
-                dtype=dtype,
-            )
+        W = init.kaiming_uniform(
+            in_features,
+            out_features,
+            device=device,
+            dtype=dtype,
         )
+        self.weight = Parameter(W)
         if bias:
             # Round-about initialization because kaiming_uniform depends on the
             # `fan_in` argument to compute the {upper,lower} bounds
