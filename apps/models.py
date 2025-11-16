@@ -1,24 +1,76 @@
 import sys
 
 sys.path.append("./python")
+import math
+
 import needle as ndl
 import needle.nn as nn
-import math
 import numpy as np
 
 np.random.seed(0)
+
+
+class ConvBN(ndl.nn.Module):
+    def __init__(
+        self,
+        a: int,  # in-channels
+        b: int,  # out-channels
+        k: int,  # kernel size
+        s: int,  # stride
+        device=None,
+        dtype="float32",
+    ):
+        super().__init__()
+        self.model = nn.Sequential(
+            nn.Conv(
+                in_channels=a,
+                out_channels=b,
+                kernel_size=k,
+                stride=s,
+                device=device,
+                dtype=dtype,
+            ),
+            nn.BatchNorm2d(dim=b, device=device, dtype=dtype),
+            nn.ReLU(),
+        )
+
+    def forward(self, x):
+        return self.model(x)
 
 
 class ResNet9(ndl.nn.Module):
     def __init__(self, device=None, dtype="float32"):
         super().__init__()
         ### BEGIN YOUR SOLUTION ###
-        raise NotImplementedError()  ###
+        self.model = nn.Sequential(
+            ConvBN(a=3, b=16, k=7, s=4, device=device, dtype=dtype),
+            ConvBN(a=16, b=32, k=3, s=2, device=device, dtype=dtype),
+            nn.Residual(
+                nn.Sequential(
+                    ConvBN(a=32, b=32, k=3, s=1, device=device, dtype=dtype),
+                    ConvBN(a=32, b=32, k=3, s=1, device=device, dtype=dtype),
+                )
+            ),
+            nn.Sequential(
+                ConvBN(a=32, b=64, k=3, s=2, device=device, dtype=dtype),
+                ConvBN(a=64, b=128, k=3, s=2, device=device, dtype=dtype),
+            ),
+            nn.Residual(
+                nn.Sequential(
+                    ConvBN(a=128, b=128, k=3, s=1, device=device, dtype=dtype),
+                    ConvBN(a=128, b=128, k=3, s=1, device=device, dtype=dtype),
+                )
+            ),
+            nn.Flatten(),
+            nn.Linear(in_features=128, out_features=128, device=device, dtype=dtype),
+            nn.ReLU(),
+            nn.Linear(in_features=128, out_features=10, device=device, dtype=dtype),
+        )
         ### END YOUR SOLUTION
 
     def forward(self, x):
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        return self.model(x)
         ### END YOUR SOLUTION
 
 

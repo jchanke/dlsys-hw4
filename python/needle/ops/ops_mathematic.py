@@ -287,13 +287,17 @@ class MatMul(TensorOp):
         X, W = node.inputs
         X_adjoint = matmul(out_grad, transpose(W))
         W_adjoint = matmul(transpose(X), out_grad)
-        X_sum_over_axes = tuple(range(-len(X_adjoint.shape), -len(X.shape)))
-        W_sum_over_axes = tuple(range(-len(W_adjoint.shape), -len(W.shape)))
 
-        return (
-            reshape(summation(X_adjoint, axes=X_sum_over_axes), X.shape),
-            reshape(summation(W_adjoint, axes=W_sum_over_axes), W.shape),
-        )
+        # NumPy only: batch matrix multiplication
+        X_grad, W_grad = X_adjoint, W_adjoint
+        X_sum_over_axes = tuple(range(-len(X_adjoint.shape), -len(X.shape)))
+        if X_sum_over_axes:
+            X_grad = reshape(summation(X_adjoint, axes=X_sum_over_axes), X.shape)
+        W_sum_over_axes = tuple(range(-len(W_adjoint.shape), -len(W.shape)))
+        if W_sum_over_axes:
+            W_grad = reshape(summation(W_adjoint, axes=W_sum_over_axes), W.shape)
+
+        return X_grad, W_grad
         ### END YOUR SOLUTION
 
 
@@ -359,7 +363,7 @@ class ReLU(TensorOp):
     def gradient(self, out_grad, node):
         ### BEGIN YOUR SOLUTION
         (a,) = node.inputs
-        return out_grad * Tensor(a.cached_data > 0)
+        return out_grad * Tensor(a.cached_data > 0, device=node.cached_data.device)
         ### END YOUR SOLUTION
 
 

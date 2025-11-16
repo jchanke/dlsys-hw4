@@ -158,7 +158,16 @@ class SoftmaxLoss(Module):
         ### BEGIN YOUR SOLUTION
         batch, num_labels = logits.shape
         log_sum_exp = ops.logsumexp(logits, axes=(1,))
-        z_y = ops.summation(init.one_hot(num_labels, y) * logits, axes=(1,))
+        z_y = ops.summation(
+            init.one_hot(
+                num_labels,
+                y,
+                device=log_sum_exp.device,
+                dtype=log_sum_exp.dtype,
+            )
+            * logits,
+            axes=(1,),
+        )
         return ops.summation(log_sum_exp - z_y) / batch
         ### END YOUR SOLUTION
 
@@ -265,7 +274,7 @@ class Dropout(Module):
         ### BEGIN YOUR SOLUTION
         if not self.training:
             return x
-        mask = init.randb(*x.shape, p=(1 - self.p))
+        mask = init.randb(*x.shape, p=(1 - self.p), device=x.device, dtype=x.dtype)
         return x * mask / (1 - self.p)
         ### END YOUR SOLUTION
 
