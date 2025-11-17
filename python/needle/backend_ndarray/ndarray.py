@@ -667,6 +667,8 @@ class NDArray:
         axis: int | tuple[int, ...] | list[int] | None = None,
         keepdims: bool = False,
     ) -> "NDArray":
+        if axis is not None and len(axis) == 0:
+            return self
         view, out = self.reduce_view_out(axis, keepdims=keepdims)
         self.device.reduce_sum(view.compact()._handle, out._handle, view.shape[-1])
         return out
@@ -676,6 +678,8 @@ class NDArray:
         axis: int | tuple[int, ...] | list[int] | None = None,
         keepdims: bool = False,
     ) -> "NDArray":
+        if axis is not None and len(axis) == 0:
+            return self
         view, out = self.reduce_view_out(axis, keepdims=keepdims)
         self.device.reduce_max(view.compact()._handle, out._handle, view.shape[-1])
         return out
