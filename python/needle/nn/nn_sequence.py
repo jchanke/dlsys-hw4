@@ -18,7 +18,7 @@ class Sigmoid(Module):
 
     def forward(self, x: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        return init.ones_like(x, device=x.device) / (1 + ops.exp(-x))
         ### END YOUR SOLUTION
 
 
@@ -214,7 +214,12 @@ class RNN(Module):
 
 class LSTMCell(Module):
     def __init__(
-        self, input_size, hidden_size, bias=True, device=None, dtype="float32"
+        self,
+        input_size: int,
+        hidden_size: int,
+        bias: bool = True,
+        device=None,
+        dtype="float32",
     ):
         """
         A long short-term memory (LSTM) cell.
@@ -234,7 +239,20 @@ class LSTMCell(Module):
         """
         super().__init__()
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        # Initialize weights & biases
+        self.has_bias = bias
+        bound = 1 / math.sqrt(hidden_size)
+        I, H = input_size, hidden_size
+
+        W_ih = init.rand(I, 4 * H, low=-bound, high=bound, device=device, dtype=dtype)
+        W_hh = init.rand(H, 4 * H, low=-bound, high=bound, device=device, dtype=dtype)
+        self.W_ih = W_ih
+        self.W_hh = W_hh
+        if bias:
+            b_ih = init.rand(4 * H, low=-bound, high=bound, device=device, dtype=dtype)
+            b_hh = init.rand(4 * H, low=-bound, high=bound, device=device, dtype=dtype)
+        self.bias_ih = b_ih if bias else None
+        self.bias_hh = b_hh if bias else None
         ### END YOUR SOLUTION
 
     def forward(self, X, h=None):
@@ -254,7 +272,33 @@ class LSTMCell(Module):
             element in the batch.
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        W_ih, W_hh = self.W_ih, self.W_hh
+        B, _ = X.cached_data.shape
+        H, _ = W_hh.cached_data.shape
+        if h is None:
+            h0 = init.zeros(B, H, device=X.device, dtype=X.dtype, requires_grad=False)
+            c0 = init.zeros(B, H, device=X.device, dtype=X.dtype, requires_grad=False)
+        else:
+            h0, c0 = h
+
+        # Compute linear part of i, f, g, o together
+        Z = X @ W_ih + h0 @ W_hh
+        if self.has_bias:
+            bias = self.bias_ih + self.bias_hh
+            Z += ops.broadcast_to(ops.reshape(bias, shape=(1, 4 * H)), shape=(B, 4 * H))
+
+        # Split, apply non-linearity to get i, f, g, o
+        sigmoid = Sigmoid()
+        Z_split = ops.split(ops.reshape(Z, shape=(B, 4, H)), axis=1)
+        i = sigmoid(Z_split[0])
+        f = sigmoid(Z_split[1])
+        g = ops.tanh(Z_split[2])
+        o = sigmoid(Z_split[3])
+
+        # Update cell, hidden states
+        c = f * c0 + i * g
+        h = o * ops.tanh(c)
+        return h, c
         ### END YOUR SOLUTION
 
 
@@ -290,7 +334,17 @@ class LSTM(Module):
             of shape (4*hidden_size,).
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        self.num_layers = num_layers
+        self.lstm_cells = [
+            LSTMCell(
+                input_size=input_size if k == 0 else hidden_size,
+                hidden_size=hidden_size,
+                bias=bias,
+                device=device,
+                dtype=dtype,
+            )
+            for k in range(num_layers)
+        ]
         ### END YOUR SOLUTION
 
     def forward(self, X, h=None):
@@ -311,7 +365,34 @@ class LSTM(Module):
             h_n of shape (num_layers, bs, hidden_size) containing the final hidden cell state for each element in the batch.
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        seq_len, _, _ = X.cached_data.shape
+        Xs = ops.split(X, axis=0)
+        if h is not None:
+            h0, c0 = h
+            h_inits = list(zip(ops.split(h0, axis=0), ops.split(c0, axis=0)))
+        else:
+            h_inits = (None,) * self.num_layers
+
+        # Run the sequence `Xs` through the LSTM for each layer
+        hs = [None for _ in range(seq_len)]
+        cs = [None for _ in range(seq_len)]
+        h_n = []
+        c_n = []
+        for layer_i, lstm in enumerate(self.lstm_cells):
+            input_seq = Xs if layer_i == 0 else hs
+            for j in range(seq_len):
+                h = h_inits[layer_i] if j == 0 else (hs[j - 1], cs[j - 1])
+                hs[j], cs[j] = lstm(input_seq[j], h)
+            # Save the last hidden state for layer `i`
+            h_n.append(hs[-1])
+            c_n.append(cs[-1])
+
+        output = ops.stack(tuple(hs), axis=0)
+        h_n = ops.stack(tuple(h_n), axis=0)
+        c_n = ops.stack(tuple(c_n), axis=0)
+
+        return output, (h_n, c_n)
+
         ### END YOUR SOLUTION
 
 
