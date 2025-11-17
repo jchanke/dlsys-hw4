@@ -392,7 +392,6 @@ class LSTM(Module):
         c_n = ops.stack(tuple(c_n), axis=0)
 
         return output, (h_n, c_n)
-
         ### END YOUR SOLUTION
 
 
