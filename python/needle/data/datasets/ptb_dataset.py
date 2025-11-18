@@ -114,7 +114,13 @@ def batchify(data, batch_size, device, dtype) -> np.ndarray:
     ### END YOUR SOLUTION
 
 
-def get_batch(batches, i, bptt, device=None, dtype=None) -> Tuple[Tensor, Tensor]:
+def get_batch(
+    batches: np.ndarray,
+    i: int,
+    bptt: int,
+    device=None,
+    dtype=None,
+) -> Tuple[Tensor, Tensor]:
     """
     `get_batch` subdivides the source data into chunks of length `bptt`.
     If source is equal to the example output of the batchify function, with
@@ -129,13 +135,15 @@ def get_batch(batches, i, bptt, device=None, dtype=None) -> Tuple[Tensor, Tensor
     to the seq_len dimension in the LSTM or RNN.
 
     Args:
-      batches (np.ndarray): numpy array returned from batchify function
+      batches (np.ndarray): Array returned from batchify function.
       i (int): index
-      bptt (int): Sequence length
+      bptt (int): Sequence length.
 
     Returns:
-      data (ndl.Tensor): Tensor of shape (bptt, bs) with cached data as NDArray
-      target (ndl.Tensor): Tensor of shape (bptt*bs,) with cached data as NDArray
+      data (ndl.Tensor):
+        Tensor of shape (bptt, bs) with cached data as NDArray
+      target (ndl.Tensor):
+        Tensor of shape (bptt*bs,) with cached data as NDArray
     """
     ### BEGIN YOUR SOLUTION
     data = Tensor(batches[i : i + bptt], device=device, dtype=dtype)
@@ -150,6 +158,15 @@ def get_batch(batches, i, bptt, device=None, dtype=None) -> Tuple[Tensor, Tensor
         device=device,
         dtype=dtype,
     )
+
+    # --- Actual solution from course staff ---
+    # seq_len = min(bptt, len(batches) - i - 1)
+    # data = Tensor(batches[i : i + seq_len], device=device, dtype=dtype)
+    # target = Tensor(
+    #     batches[i + 1 : i + seq_len + 1].reshape((-1,)),
+    #     device=device,
+    #     dtype=dtype,
+    # )
 
     return data, target
     ### END YOUR SOLUTION

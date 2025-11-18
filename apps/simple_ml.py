@@ -225,7 +225,6 @@ def epoch_general_ptb(
 
         # `logits` has shape (bptt*bs, output_size)
         logits, h = model(chunk, h)
-
         chunk_loss = loss_fn(logits, target)
 
         # Update running total of loss, error
