@@ -168,6 +168,7 @@ class SoftmaxLoss(Module):
             * logits,
             axes=(1,),
         )
+
         return ops.summation(log_sum_exp - z_y) / batch
         ### END YOUR SOLUTION
 

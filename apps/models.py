@@ -1,4 +1,5 @@
 import sys
+from typing import Literal, Tuple
 
 sys.path.append("./python")
 import math
@@ -77,45 +78,81 @@ class ResNet9(ndl.nn.Module):
 class LanguageModel(nn.Module):
     def __init__(
         self,
-        embedding_size,
-        output_size,
-        hidden_size,
-        num_layers=1,
-        seq_model="rnn",
-        seq_len=40,
+        embedding_size: int,
+        output_size: int,
+        hidden_size: int,
+        num_layers: int = 1,
+        seq_model: Literal["rnn", "lstm"] = "rnn",
+        seq_len: int = 40,
         device=None,
         dtype="float32",
     ):
         """
-        Consists of an embedding layer, a sequence model (either RNN or LSTM), and a
-        linear layer.
+        Consists of an embedding layer, a sequence model (either RNN or LSTM),
+        and a linear layer.
+
         Parameters:
-        output_size: Size of dictionary
-        embedding_size: Size of embeddings
-        hidden_size: The number of features in the hidden state of LSTM or RNN
-        seq_model: 'rnn' or 'lstm', whether to use RNN or LSTM
-        num_layers: Number of layers in RNN or LSTM
+          output_size (int): The size of the dictionary.
+          embedding_size (int): Embedding dimension.
+          hidden_size (int): Number of features in the hidden state of LSTM/RNN.
+          seq_model (Literal['rnn', 'lstm']): 'rnn' or 'lstm'
+          num_layers (int): Number of layers in RNN or LSTM.
         """
         super(LanguageModel, self).__init__()
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        SeqModel = nn.RNN if seq_model == "rnn" else nn.LSTM
+        self.embedding = nn.Embedding(
+            output_size,
+            embedding_size,
+            device=device,
+            dtype=dtype,
+        )
+        self.seq_model = SeqModel(
+            input_size=embedding_size,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            device=device,
+            dtype=dtype,
+        )
+        self.linear = nn.Linear(hidden_size, output_size, device=device, dtype=dtype)
         ### END YOUR SOLUTION
 
-    def forward(self, x, h=None):
+    def forward(
+        self,
+        x: ndl.Tensor,
+        h: ndl.Tensor | Tuple[ndl.Tensor] | None = None,
+    ):
         """
-        Given sequence (and the previous hidden state if given), returns probabilities of next word
-        (along with the last hidden state from the sequence model).
-        Inputs:
-        x of shape (seq_len, bs)
-        h of shape (num_layers, bs, hidden_size) if using RNN,
-            else h is tuple of (h0, c0), each of shape (num_layers, bs, hidden_size)
+        Given sequence (and the previous hidden state if given), returns
+        probabilities of next word (along with the last hidden state from the
+        sequence model).
+
+        Args:
+          x of shape (seq_len, bs)
+          h of shape (num_layers, bs, hidden_size) if using RNN,
+            else h is tuple of (h0, c0), each of shape (num_layers, bs,
+            hidden_size)
+
         Returns (out, h)
-        out of shape (seq_len*bs, output_size)
-        h of shape (num_layers, bs, hidden_size) if using RNN,
-            else h is tuple of (h0, c0), each of shape (num_layers, bs, hidden_size)
+          out of shape (seq_len*bs, output_size)
+          h of shape (num_layers, bs, hidden_size) if using RNN,
+            else h is tuple of (h0, c0), each of shape (num_layers, bs,
+            hidden_size)
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        _, O = self.linear.weight.cached_data.shape
+
+        x_embed = self.embedding(x)
+        z, h = self.seq_model(x_embed, h)
+
+        # `z` has shape (seq_len, bs, hidden_size); reshape before/after matmul
+        seq_len, bs, hidden_size = z.cached_data.shape
+        z = ndl.ops.reshape(z, (seq_len * bs, hidden_size))
+        logits = self.linear(z)
+        # Reassemble batches into sequence
+        logits = ndl.ops.reshape(logits, (-1, O))
+
+        return logits, h
         ### END YOUR SOLUTION
 
 

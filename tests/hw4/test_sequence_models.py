@@ -2,18 +2,16 @@ import sys
 
 sys.path.append("./python")
 sys.path.append("./apps")
+import itertools
+
+import mugrade
+import needle as ndl
+import needle.nn as nn
 import numpy as np
 import pytest
 import torch
-import itertools
-import mugrade
-
-import needle as ndl
-import needle.nn as nn
-
-from simple_ml import *
 from models import LanguageModel
-
+from simple_ml import *
 
 np.random.seed(3)
 

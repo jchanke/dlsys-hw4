@@ -177,8 +177,9 @@ class RNN(Module):
           X of shape (seq_len, bs, input_size) containing the features of the
           input sequence.
 
-          h0 of shape (num_layers, bs, hidden_size) containing the initial hidden
-          state for each element in the batch. Defaults to zeros if not provided.
+          h0 of shape (num_layers, bs, hidden_size) containing the initial
+          hidden state for each element in the batch. Defaults to zeros if not
+          provided.
 
         Outputs:
 
@@ -206,7 +207,7 @@ class RNN(Module):
             h_n.append(output[-1])
 
         output = ops.stack(tuple(output), axis=0)
-        h_n = ops.stack(tuple(h_n), axis=0)
+        h_n = ops.stack(tuple(h_n), axis=0).detach()
 
         return output, h_n
         ### END YOUR SOLUTION
@@ -246,13 +247,13 @@ class LSTMCell(Module):
 
         W_ih = init.rand(I, 4 * H, low=-bound, high=bound, device=device, dtype=dtype)
         W_hh = init.rand(H, 4 * H, low=-bound, high=bound, device=device, dtype=dtype)
-        self.W_ih = W_ih
-        self.W_hh = W_hh
+        self.W_ih = Parameter(W_ih)
+        self.W_hh = Parameter(W_hh)
         if bias:
             b_ih = init.rand(4 * H, low=-bound, high=bound, device=device, dtype=dtype)
             b_hh = init.rand(4 * H, low=-bound, high=bound, device=device, dtype=dtype)
-        self.bias_ih = b_ih if bias else None
-        self.bias_hh = b_hh if bias else None
+        self.bias_ih = Parameter(b_ih) if bias else None
+        self.bias_hh = Parameter(b_hh) if bias else None
         ### END YOUR SOLUTION
 
     def forward(self, X, h=None):
@@ -388,29 +389,43 @@ class LSTM(Module):
             c_n.append(cs[-1])
 
         output = ops.stack(tuple(hs), axis=0)
-        h_n = ops.stack(tuple(h_n), axis=0)
-        c_n = ops.stack(tuple(c_n), axis=0)
+        h_n = ops.stack(tuple(h_n), axis=0).detach()
+        c_n = ops.stack(tuple(c_n), axis=0).detach()
 
         return output, (h_n, c_n)
         ### END YOUR SOLUTION
 
 
 class Embedding(Module):
-    def __init__(self, num_embeddings, embedding_dim, device=None, dtype="float32"):
+    def __init__(
+        self,
+        num_embeddings,
+        embedding_dim,
+        device=None,
+        dtype="float32",
+    ):
         super().__init__()
         """
         Maps one-hot word vectors from a dictionary of fixed size to embeddings.
 
         Parameters:
-        num_embeddings (int) - Size of the dictionary
-        embedding_dim (int) - The size of each embedding vector
+          num_embeddings (int): Size of the dictionary
+          embedding_dim (int): The size of each embedding vector
 
         Variables:
-        weight - The learnable weights of shape (num_embeddings, embedding_dim)
+          weight (ndl.NDArray):
+            The learnable weights of shape (num_embeddings, embedding_dim)
             initialized from N(0, 1).
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        weight = init.randn(
+            num_embeddings,
+            embedding_dim,
+            device=device,
+            dtype=dtype,
+            requires_grad=True,
+        )
+        self.weight = Parameter(weight)
         ### END YOUR SOLUTION
 
     def forward(self, x: Tensor) -> Tensor:
@@ -418,11 +433,18 @@ class Embedding(Module):
         Maps word indices to one-hot vectors, and projects to embedding vectors
 
         Input:
-        x of shape (seq_len, bs)
+          x (ndl.Tensor): sequence of word id's of shape (seq_len, bs)
 
         Output:
-        output of shape (seq_len, bs, embedding_dim)
+          output of shape (seq_len, bs, embedding_dim)
         """
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        seq_len, bs = x.cached_data.shape
+        D, M = self.weight.cached_data.shape
+        x_oh = init.one_hot(D, x, device=x.device, dtype=x.dtype)
+
+        # `x_oh` has shape (seq_len, bs, D) — reshape before & after matmul
+        x_oh = ops.reshape(x_oh, (-1, D))
+        x_embed = ops.reshape(x_oh @ self.weight, (seq_len, bs, M))
+        return x_embed
         ### END YOUR SOLUTION

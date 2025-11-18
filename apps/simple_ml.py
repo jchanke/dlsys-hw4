@@ -1,17 +1,17 @@
 """hw1/apps/simple_ml.py"""
 
-import struct
 import gzip
-import numpy as np
-
+import struct
 import sys
 
-sys.path.append("python/")
-import needle as ndl
+import numpy as np
 
+sys.path.append("python/")
+import time
+
+import needle as ndl
 import needle.nn as nn
 from apps.models import *
-import time
 
 device = ndl.cpu()
 
@@ -169,11 +169,11 @@ def evaluate_cifar10(model, dataloader, loss_fn=nn.SoftmaxLoss):
 
 ### PTB training ###
 def epoch_general_ptb(
-    data,
-    model,
-    seq_len=40,
+    data: np.ndarray,
+    model: LanguageModel,
+    seq_len: int = 40,
     loss_fn=nn.SoftmaxLoss(),
-    opt=None,
+    opt: ndl.optim.Optimizer | None = None,
     clip=None,
     device=None,
     dtype="float32",
@@ -198,7 +198,52 @@ def epoch_general_ptb(
     """
     np.random.seed(4)
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    if opt is None:
+        model.eval()
+    else:
+        model.train()
+
+    total_correct = 0.0
+    total_loss = 0.0
+
+    # Iterate over each `bptt`-sized chunk along nbatch (length of each batch)
+    nbatch, bs = data.shape
+
+    # Checkpoint hidden state at the end of each `bptt`-sized chunk
+    h = None
+
+    for i in range(0, nbatch, seq_len):
+        # If in training: reset gradients
+        if opt:
+            opt.reset_grad()
+
+        # --- Make predictions and computing loss ---
+        # `chunk` has shape (<bptt, bs,); target has shape (<bptt*bs,)
+        # note: for the last chunk, the chunk length is possibly < bptt
+        chunk, target = ndl.data.get_batch(data, i, seq_len, device=device, dtype=dtype)
+        chunk_length, _ = chunk.cached_data.shape
+
+        # `logits` has shape (bptt*bs, output_size)
+        logits, h = model(chunk, h)
+
+        chunk_loss = loss_fn(logits, target)
+
+        # Update running total of loss, error
+        preds = np.argmax(logits.numpy(), axis=1)
+        chunk_correct = np.sum(preds == target.numpy())
+
+        total_correct += chunk_correct
+        total_loss += chunk_loss.numpy() * chunk_length * bs
+
+        # If training: compute gradient, and update weights
+        if opt:
+            chunk_loss.backward()
+            opt.step()
+
+    avg_acc = total_correct / (nbatch * bs)
+    avg_loss = total_loss / (nbatch * bs)
+
+    return avg_acc, avg_loss
     ### END YOUR SOLUTION
 
 
@@ -235,12 +280,30 @@ def train_ptb(
     """
     np.random.seed(4)
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    model.train()
+    opt = optimizer(params=model.parameters(), lr=lr, weight_decay=weight_decay)
+    for _ in range(n_epochs):
+        avg_acc, avg_loss = epoch_general_ptb(
+            data=data,
+            model=model,
+            seq_len=seq_len,
+            loss_fn=loss_fn(),
+            opt=opt,
+            clip=clip,
+            device=device,
+            dtype=dtype,
+        )
+    return avg_acc, avg_loss
     ### END YOUR SOLUTION
 
 
 def evaluate_ptb(
-    model, data, seq_len=40, loss_fn=nn.SoftmaxLoss, device=None, dtype="float32"
+    model,
+    data,
+    seq_len=40,
+    loss_fn=nn.SoftmaxLoss,
+    device=None,
+    dtype="float32",
 ):
     """
     Computes the test accuracy and loss of the model.
@@ -257,7 +320,16 @@ def evaluate_ptb(
     """
     np.random.seed(4)
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    model.eval()
+    avg_acc, avg_loss = epoch_general_ptb(
+        data,
+        model,
+        seq_len,
+        loss_fn=loss_fn(),
+        device=device,
+        dtype=dtype,
+    )
+    return avg_acc, avg_loss
     ### END YOUR SOLUTION
 
 

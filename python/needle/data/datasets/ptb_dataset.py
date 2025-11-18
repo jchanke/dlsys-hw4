@@ -139,10 +139,17 @@ def get_batch(batches, i, bptt, device=None, dtype=None) -> Tuple[Tensor, Tensor
     """
     ### BEGIN YOUR SOLUTION
     data = Tensor(batches[i : i + bptt], device=device, dtype=dtype)
+
+    # To get the target: un-batchify the sequence, cyclic shift, then re-batchify
+    _, bs = batches.shape
+    unbatched = np.swapaxes(batches, 0, 1).reshape((-1,))
+    shifted = np.roll(unbatched, -1)
+    batches_shifted = batchify(shifted, bs, device=device, dtype=dtype)
     target = Tensor(
-        np.reshape(batches[i + 1 : i + bptt + 1], (-1,)),
+        batches_shifted[i : i + bptt].reshape((-1,)),
         device=device,
         dtype=dtype,
     )
+
     return data, target
     ### END YOUR SOLUTION
