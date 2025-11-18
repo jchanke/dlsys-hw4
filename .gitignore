@@ -2,5 +2,6 @@ data/
 build/
 
 **/*.so
+**/*.tar.gz
 
 **/__pycache__/
