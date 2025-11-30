@@ -102,6 +102,7 @@ class Linear(Module):
             dtype=dtype,
         )
         self.weight = Parameter(W)
+        self.bias = None
         if bias:
             # Round-about initialization because kaiming_uniform depends on the
             # `fan_in` argument to compute the {upper,lower} bounds
@@ -117,7 +118,9 @@ class Linear(Module):
     def forward(self, X: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
         XW = X @ self.weight
-        return XW + ops.broadcast_to(self.bias, XW.shape)
+        if self.bias:
+            XW += ops.broadcast_to(self.bias, XW.shape)
+        return XW
         ### END YOUR SOLUTION
 
 

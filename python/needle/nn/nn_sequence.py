@@ -418,6 +418,8 @@ class Embedding(Module):
             initialized from N(0, 1).
         """
         ### BEGIN YOUR SOLUTION
+        self.embedding_dim = embedding_dim
+
         weight = init.randn(
             num_embeddings,
             embedding_dim,
