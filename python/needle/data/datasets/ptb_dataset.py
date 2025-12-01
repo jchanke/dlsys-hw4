@@ -85,6 +85,28 @@ class Corpus(object):
         return ids
         ### END YOUR SOLUTION
 
+    def encode(
+        self,
+        text: List[str],
+    ) -> List[int]:
+        w2i = self.dictionary.word2idx
+        idxs = []
+        idx_unk = w2i.get("<unk>")
+        for w in text.split():
+            idxs.append(w2i.get(w, idx_unk))
+        return idxs
+
+    def decode(
+        self,
+        idxs: np.ndarray,
+    ):
+        assert idxs.ndim == 1, "only batch_size=1 for now"
+        i2w = self.dictionary.idx2word
+        tokens = []
+        for i in idxs:
+            tokens.append(i2w[i])
+        return " ".join(tokens)
+
 
 def batchify(data, batch_size, device, dtype) -> np.ndarray:
     """

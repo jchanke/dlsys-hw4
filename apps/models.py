@@ -107,14 +107,14 @@ class LanguageModel(nn.Module):
         """
         super(LanguageModel, self).__init__()
         ### BEGIN YOUR SOLUTION
+        self.seq_len = seq_len
+
         if seq_model == "rnn":
             SeqModel = nn.RNN
         elif seq_model == "lstm":
             SeqModel = nn.LSTM
         elif seq_model == "transformer":
             SeqModel = nn.Transformer
-
-        print(seq_model)
 
         # --- Token embedding ---
         self.embedding = nn.Embedding(
@@ -158,7 +158,14 @@ class LanguageModel(nn.Module):
             )
 
         # --- Projection back to probabilities (output_size/num_tokens)
-        self.linear = nn.Linear(hidden_size, output_size, device=device, dtype=dtype)
+        if seq_model == "transformer":
+            self.linear = nn.Linear(
+                embedding_size, output_size, device=device, dtype=dtype
+            )
+        else:
+            self.linear = nn.Linear(
+                hidden_size, output_size, device=device, dtype=dtype
+            )
         ### END YOUR SOLUTION
 
     def forward(
@@ -193,6 +200,7 @@ class LanguageModel(nn.Module):
         # `z` has shape (seq_len, bs, hidden_size); reshape before/after matmul
         seq_len, bs, hidden_size = z.cached_data.shape
         z = ndl.ops.reshape(z, (seq_len * bs, hidden_size))
+
         logits = self.linear(z)
         # Reassemble batches into sequence
         logits = ndl.ops.reshape(logits, (-1, O))
@@ -220,8 +228,8 @@ class LanguageModel(nn.Module):
         self,
         idx: ndl.Tensor,
         max_new_tokens: int,
-        temperature=1.0,
-        context_length: int = None,
+        temperature: float = 1.0,
+        corpus: ndl.data.Corpus = None,
         h0: ndl.Tensor | Tuple[ndl.Tensor] | None = None,
         # top_k=None,
     ):
@@ -242,22 +250,37 @@ class LanguageModel(nn.Module):
         """
         h = h0
         device, dtype = idx.device, idx.dtype
+        is_transformer = isinstance(self.seq_model, nn.Transformer)
+
+        # FOR DEMO:
+        i2w = corpus.dictionary.idx2word
+
+        idx = idx.cached_data.numpy()
+
+        for i in idx:
+            i = i.astype("int32").item()
+            print(i2w[i], end=" ")
+
         for _ in range(max_new_tokens):
             T, B = idx.shape
-            # If the sequence context is growing too long we must crop it at
-            # context_length tokens
-            if context_length:
-                idx_cond = idx if T <= context_length else idx[-context_length:, :]
+            if self.seq_len:
+                idx_cond = idx if T <= self.seq_len else idx[-self.seq_len :, :]
             else:
                 idx_cond = idx
 
-            logits, h = self(idx_cond, h)
+            idx_cond = ndl.Tensor(idx_cond, device=device, dtype=dtype)
+
+            if is_transformer:
+                logits, _ = self(idx_cond, None)
+            else:
+                logits, h = self(idx_cond, h)
 
             # logits: (T*B,O,) --> (B,T,O,)
             _, O = logits.shape
-            logits = logits.reshape((T, B, O)).transpose((0, 1))
+            logits = logits.reshape((min(T, self.seq_len), B, O)).transpose((0, 1))
 
             # Pluck the logits at the final step and scale by desired temperature
+            logits = logits.numpy()
             logits = logits[:, -1, :] / temperature
             logits = logits.reshape((B, O))
 
@@ -267,18 +290,27 @@ class LanguageModel(nn.Module):
             #     logits[logits < v[:, [-1]]] = -float("Inf")
 
             # Apply softmax to convert logits to (normalized) probabilities
-            probs = ndl.ops.exp(ndl.ops.logsoftmax(logits))
+            probs = np.exp(logits)
+            probs = probs / np.sum(probs, axis=(-1,), keepdims=True)
 
             # Sample from the distribution
-            probs = probs.numpy()
-            idx_next = self.multinomial(probs)
+            # idx_next = self.multinomial(probs)
+            # idx_next = self.multinomial(probs).T
+
+            probs = probs / probs.sum(axis=1, keepdims=True)
+            cumprobs = np.cumsum(probs, axis=1)
+            random_vals = np.random.rand(len(probs))
+
+            idx_next = (cumprobs < random_vals[:, None]).sum(axis=1, keepdims=True).T
 
             # idx_next: has shape (B,)
             # append sampled index to the running sequence and continue
             idx = np.concatenate((idx, idx_next), axis=0)
 
-            # Turn idx back to a Tensor
-            idx = ndl.Tensor(idx, device=device, dtype=dtype, requires_grad=False)
+            # FOR DEMO: print each new thing as it comes
+
+            word = i2w[idx_next.item()]
+            print(word, end=" ")
 
         return idx
 

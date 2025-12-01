@@ -443,6 +443,7 @@ class Embedding(Module):
         ### BEGIN YOUR SOLUTION
         seq_len, bs = x.cached_data.shape
         D, M = self.weight.cached_data.shape
+
         x_oh = init.one_hot(D, x, device=x.device, dtype=x.dtype)
 
         # `x_oh` has shape (seq_len, bs, D) — reshape before & after matmul

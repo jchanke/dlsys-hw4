@@ -359,11 +359,11 @@ class Transformer(Module):
         num_head: int = 8,
         dim_head: int = 32,
         dropout: float = 0.0,
-        causal=True,
+        causal: bool = True,
         device=None,
         dtype="float32",
-        batch_first=False,
-        sequence_len=2048,
+        batch_first: bool = False,
+        sequence_len: int = 2048,
     ):
         """
         Inputs:
