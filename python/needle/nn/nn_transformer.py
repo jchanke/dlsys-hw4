@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import List
 
 import numpy as np
@@ -9,6 +10,15 @@ from needle.autograd import Tensor
 
 from .nn_basic import Dropout, LayerNorm1d, Linear, Module, Parameter, ReLU, Sequential
 from .nn_sequence import Embedding
+
+
+@dataclass
+class GPTConfig:
+    block_size: int = 1024
+    vocab_size: int = 50257  # 50k bpe + 256 bytes token + 1 end token
+    n_layer: int = 12
+    n_head: int = 12
+    n_embd: int = 768
 
 
 class MultiHeadAttention(Module):
@@ -254,7 +264,7 @@ class AttentionLayer(Module):
         K = K.reshape((B, keys_values_len, H, D)).transpose((1, 2))
         V = V.reshape((B, keys_values_len, H, D)).transpose((1, 2))
 
-        # --- 1ompute multi-head attention activation ---
+        # --- Compute multi-head attention activation ---
         X, _ = self.attn(Q, K, V)
 
         # --- Reshape X: (B,H,T_q,D) --> (B,T_q,H,D) --> (B,T_q,HD) ---
@@ -287,21 +297,19 @@ class TransformerLayer(Module):
         self.dtype = dtype
 
         ### BEGIN YOUR SOLUTION
-        self.attn = AttentionLayer(
-            q_features=q_features,
-            num_head=num_head,
-            dim_head=dim_head,
-            dropout=dropout,
-            causal=causal,
-            device=device,
-            dtype=dtype,
-        )
-
-        self.attn_dropout = Sequential(
-            self.attn,
+        self.attn = Sequential(
+            AttentionLayer(
+                q_features=q_features,
+                num_head=num_head,
+                dim_head=dim_head,
+                dropout=dropout,
+                causal=causal,
+                device=device,
+                dtype=dtype,
+            ),
             Dropout(p=dropout),
         )
-        self.layernorm_mlp_dropout = Sequential(
+        self.mlp = Sequential(
             LayerNorm1d(q_features, device=device, dtype=dtype),
             Linear(q_features, hidden_size, bias=True, device=device, dtype=dtype),
             ReLU(),
@@ -314,8 +322,14 @@ class TransformerLayer(Module):
     def forward(self, x):
         """
         The forward function of a Transformer Layer.
-        Input: the hidden states from previous layers `x` with shape (batch_size, seq_len, x_dim)
-        Ouput: the hidden states after the Transformer Layer `x` with shape (batch_size, seq_len, x_dim)
+
+        Input:
+          x (Tensor): the hidden states from previous layers, with shape
+            (B, T, D)
+
+        Ouput:
+          out (Tensor): the hidden states after the Transformer Layer, with shape
+            (B, T, D)
         """
 
         batch_size, seq_len, x_dim = x.shape
@@ -323,11 +337,11 @@ class TransformerLayer(Module):
         ### BEGIN YOUR SOLUTION
         B, T, D = batch_size, seq_len, x_dim
 
-        x = x + self.attn_dropout(x)
+        x = x + self.attn(x)
 
         # (B,T,D) --> (B*T,D)
         mlp_residual = x.reshape((B * T, D))
-        mlp_residual = self.layernorm_mlp_dropout(mlp_residual).reshape((B, T, D))
+        mlp_residual = self.mlp(mlp_residual).reshape((B, T, D))
 
         x = x + mlp_residual
         ### END YOUR SOLUTION
@@ -344,13 +358,24 @@ class Transformer(Module):
         *,
         num_head: int = 8,
         dim_head: int = 32,
-        dropout=0.0,
+        dropout: float = 0.0,
         causal=True,
         device=None,
         dtype="float32",
         batch_first=False,
         sequence_len=2048,
     ):
+        """
+        Inputs:
+          embedding_size (int): D, the embedding dim. of each token
+          hidden_size (int): H, the MLP maps from D --> H --> D
+          num_layers (int): number of TransformerLayer layers
+          num_head (int): number of attention heads
+          dim_head (int): dimension of each attention head
+          dropout (float): probability of dropout in both attention & MLP
+            sub-layers
+          causal (bool): whether to do causal masking
+        """
         super().__init__()
 
         self.device = device
@@ -384,9 +409,22 @@ class Transformer(Module):
 
     def forward(
         self,
-        x,
-        h=None,
+        x: Tensor,
+        h: Tensor = None,  # for compatibility with other LanguageModel's
     ):
+        """
+        Adds positional embedding to x, then runs through transformer layers.
+
+        Inputs:
+          x (Tensor): Input embedded sequence, with shape (T, B, D) where
+            D is the embedding dimension.
+          h (Tensor): Dummy 'hidden state' — not used. To match the function
+            signature of RNN's and LSTM's.
+
+        Outputs:
+          x (Tensor): Transformed output, with shape (T, B, D).
+          h (Tensor): Dummy 'hidden state' — not used (see above).
+        """
         if not self.batch_first:
             x = ops.transpose(x, axes=(0, 1))
 
@@ -395,11 +433,9 @@ class Transformer(Module):
         assert D == self.pos_embedding.embedding_dim
 
         # --- Positionally embed timestep id's ---
-        timestep_ids = np.arange(T, dtype=np.int32)
-
         # (T,) --> (T,B)
+        timestep_ids = np.arange(T, dtype=np.int32)
         timestep_ids = np.broadcast_to(np.reshape(timestep_ids, (T, 1)), (T, B))
-
         timestep_tensor = Tensor(
             timestep_ids,
             device=x.device,
@@ -407,7 +443,7 @@ class Transformer(Module):
             requires_grad=False,
         )
 
-        # (T,B) --> (T, B, D) --> (B, T, D)
+        # (T, B) --> (T, B, D) --> (B, T, D)
         pos_emb = self.pos_embedding(timestep_tensor).transpose((0, 1))
 
         # --- Add positional embedding ---

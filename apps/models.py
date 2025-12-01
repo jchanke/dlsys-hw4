@@ -82,38 +82,82 @@ class LanguageModel(nn.Module):
         output_size: int,
         hidden_size: int,
         num_layers: int = 1,
-        seq_model: Literal["rnn", "lstm"] = "rnn",
+        seq_model: Literal["rnn", "lstm", "transformer"] = "rnn",
         seq_len: int = 40,
         device=None,
         dtype="float32",
+        # --- Transformer-only parameters ---
+        num_head: int | None = None,
+        dim_head: int | None = None,
+        dropout: float | None = None,
+        causal: bool | None = None,
     ):
         """
-        Consists of an embedding layer, a sequence model (either RNN or LSTM),
-        and a linear layer.
+        Consists of
+          an embedding layer,
+          a sequence model (either RNN, LSTM or Transformer), and
+          a linear layer ("LM head").
 
         Parameters:
-          output_size (int): The size of the dictionary.
+          output_size (int): Size of the dictionary, or number of tokens.
           embedding_size (int): Embedding dimension.
           hidden_size (int): Number of features in the hidden state of LSTM/RNN.
-          seq_model (Literal['rnn', 'lstm']): 'rnn' or 'lstm'
-          num_layers (int): Number of layers in RNN or LSTM.
+          seq_model (Literal['rnn', 'lstm', 'transformer']): 'rnn' or 'lstm'
+          num_layers (int): Number of layers in LanguageModel.
         """
         super(LanguageModel, self).__init__()
         ### BEGIN YOUR SOLUTION
-        SeqModel = nn.RNN if seq_model == "rnn" else nn.LSTM
+        if seq_model == "rnn":
+            SeqModel = nn.RNN
+        elif seq_model == "lstm":
+            SeqModel = nn.LSTM
+        elif seq_model == "transformer":
+            SeqModel = nn.Transformer
+
+        print(seq_model)
+
+        # --- Token embedding ---
         self.embedding = nn.Embedding(
             output_size,
             embedding_size,
             device=device,
             dtype=dtype,
         )
-        self.seq_model = SeqModel(
-            input_size=embedding_size,
-            hidden_size=hidden_size,
-            num_layers=num_layers,
-            device=device,
-            dtype=dtype,
-        )
+        # --- Language Model ---
+        if seq_model in ["rnn", "lstm"]:
+            self.seq_model = SeqModel(
+                input_size=embedding_size,
+                hidden_size=hidden_size,
+                num_layers=num_layers,
+                device=device,
+                dtype=dtype,
+            )
+        elif seq_model == "transformer":
+            """
+            Explanatory notes:
+             - In the GPT-2 paper, the MLP's hidden size H (MLP = D --> H --> D)
+               is given as 4 * D.
+             - LanguageModel expects inputs of the shape (T, B), so
+               Transformer's forward layer should expect input of shape 
+               (T, B, D)
+            """
+            assert num_head and dim_head and dropout and causal
+
+            self.seq_model = nn.Transformer(
+                embedding_size=embedding_size,
+                hidden_size=4 * embedding_size,
+                num_layers=num_layers,
+                num_head=num_head,
+                dim_head=dim_head,
+                dropout=dropout,
+                causal=causal,
+                device=device,
+                dtype=dtype,
+                batch_first=False,
+                sequence_len=seq_len,
+            )
+
+        # --- Projection back to probabilities (output_size/num_tokens)
         self.linear = nn.Linear(hidden_size, output_size, device=device, dtype=dtype)
         ### END YOUR SOLUTION
 
@@ -134,7 +178,7 @@ class LanguageModel(nn.Module):
             hidden_size)
 
         Returns (out, h)
-          out of shape (seq_len*bs, output_size)
+          logits of shape (seq_len*bs, output_size)
           h of shape (num_layers, bs, hidden_size) if using RNN,
             else h is tuple of (h0, c0), each of shape (num_layers, bs,
             hidden_size)
@@ -142,6 +186,7 @@ class LanguageModel(nn.Module):
         ### BEGIN YOUR SOLUTION
         _, O = self.linear.weight.cached_data.shape
 
+        # --- Embedding: x_embed has shape (T, B, D) ---
         x_embed = self.embedding(x)
         z, h = self.seq_model(x_embed, h)
 
@@ -154,6 +199,88 @@ class LanguageModel(nn.Module):
 
         return logits, h
         ### END YOUR SOLUTION
+
+    def multinomial(
+        probs: np.ndarray,
+    ):
+        """
+        Input:
+          probs (np.ndarray), of shape (B,O,)
+
+        Returns:
+          out (np.ndarray), or shape (B,) where each entry is a randomly
+            sampled index from 0 to O-1.
+        """
+        probs = probs / probs.sum(axis=1, keepdims=True)
+        cumprobs = np.cumsum(probs, axis=1)
+        random_vals = np.random.rand(len(probs))
+        return (cumprobs < random_vals[:, None]).sum(axis=1, keepdims=True)
+
+    def generate(
+        self,
+        idx: ndl.Tensor,
+        max_new_tokens: int,
+        temperature=1.0,
+        context_length: int = None,
+        h0: ndl.Tensor | Tuple[ndl.Tensor] | None = None,
+        # top_k=None,
+    ):
+        """
+        Take a conditioning sequence of indices idx (LongTensor of shape (b,t))
+        and complete the sequence max_new_tokens times, feeding the predictions
+        back into the model each time.
+
+        Most likely you'll want to make sure to be in model.eval() mode of
+        operation for this.
+
+        Args:
+          idx (Tensor): of shape (T, B)
+
+        -----------------------------------------------------------------------
+        Modified from:
+        https://github.com/karpathy/nanoGPT/blob/master/model.py
+        """
+        h = h0
+        device, dtype = idx.device, idx.dtype
+        for _ in range(max_new_tokens):
+            T, B = idx.shape
+            # If the sequence context is growing too long we must crop it at
+            # context_length tokens
+            if context_length:
+                idx_cond = idx if T <= context_length else idx[-context_length:, :]
+            else:
+                idx_cond = idx
+
+            logits, h = self(idx_cond, h)
+
+            # logits: (T*B,O,) --> (B,T,O,)
+            _, O = logits.shape
+            logits = logits.reshape((T, B, O)).transpose((0, 1))
+
+            # Pluck the logits at the final step and scale by desired temperature
+            logits = logits[:, -1, :] / temperature
+            logits = logits.reshape((B, O))
+
+            # # Optionally crop the logits to only the top k options
+            # if top_k is not None:
+            #     v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+            #     logits[logits < v[:, [-1]]] = -float("Inf")
+
+            # Apply softmax to convert logits to (normalized) probabilities
+            probs = ndl.ops.exp(ndl.ops.logsoftmax(logits))
+
+            # Sample from the distribution
+            probs = probs.numpy()
+            idx_next = self.multinomial(probs)
+
+            # idx_next: has shape (B,)
+            # append sampled index to the running sequence and continue
+            idx = np.concatenate((idx, idx_next), axis=0)
+
+            # Turn idx back to a Tensor
+            idx = ndl.Tensor(idx, device=device, dtype=dtype, requires_grad=False)
+
+        return idx
 
 
 if __name__ == "__main__":
