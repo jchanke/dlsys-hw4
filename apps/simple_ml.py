@@ -212,6 +212,9 @@ def epoch_general_ptb(
     # Checkpoint hidden state at the end of each `bptt`-sized chunk
     h = None
 
+    # Track total length of data (along nbatch) we've trained so far
+    nlength = 0
+
     for i in range(0, nbatch, seq_len):
         # If in training: reset gradients
         if opt:
@@ -222,6 +225,7 @@ def epoch_general_ptb(
         # note: for the last chunk, the chunk length is possibly < bptt
         chunk, target = ndl.data.get_batch(data, i, seq_len, device=device, dtype=dtype)
         chunk_length, _ = chunk.cached_data.shape
+        nlength += chunk_length
 
         # `logits` has shape (bptt*bs, output_size)
         logits, h = model(chunk, h)
@@ -238,6 +242,14 @@ def epoch_general_ptb(
         if opt:
             chunk_loss.backward()
             opt.step()
+
+        # DEMO: print statistics
+        if i % 500 == 0:
+            avg_acc = total_correct.item() / (nlength * bs)
+            avg_loss = total_loss.item() / (nlength * bs)
+            print(f"batch={i}/{nbatch // seq_len}, {avg_acc=}, {avg_loss=}")
+
+    assert nbatch == nlength
 
     avg_acc = total_correct / (nbatch * bs)
     avg_loss = total_loss / (nbatch * bs)
@@ -281,7 +293,8 @@ def train_ptb(
     ### BEGIN YOUR SOLUTION
     model.train()
     opt = optimizer(params=model.parameters(), lr=lr, weight_decay=weight_decay)
-    for _ in range(n_epochs):
+    for i in range(n_epochs):
+        print(f"epoch {i=}")
         avg_acc, avg_loss = epoch_general_ptb(
             data=data,
             model=model,
